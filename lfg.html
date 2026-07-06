@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Light Flip Puzzle</title>
+  <style>
+    body { text-align: center; font-family: Arial; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 80px);
+      gap: 10px;
+      justify-content: center;
+      margin-top: 30px;
+    }
+    button {
+      width: 80px;
+      height: 80px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .on { background-color: yellow; }
+    .off { background-color: gray; }
+  </style>
+</head>
+
+<body>
+
+<h2>🎮 Light Flip Puzzle</h2>
+
+<div class="grid" id="grid"></div>
+
+<br>
+
+<!-- IMPORTANT BUTTONS -->
+<button onclick="newGame()">🔄 New Game</button>
+<button onclick="getHint()">💡 Hint</button>
+
+<script>
+const N = 3;
+let grid = [];
+
+function createEmptyGrid() {
+  grid = Array.from({ length: N }, () => Array(N).fill(0));
+}
+
+function flip(x, y, g = grid) {
+  let dx = [0,-1,1,0,0];
+  let dy = [0,0,0,-1,1];
+
+  for (let d = 0; d < 5; d++) {
+    let nx = x + dx[d];
+    let ny = y + dy[d];
+
+    if (nx >= 0 && ny >= 0 && nx < N && ny < N) {
+      g[nx][ny] ^= 1;
+    }
+  }
+}
+
+function generatePuzzle() {
+  createEmptyGrid();
+
+  let moves = Math.floor(Math.random() * 6) + 3;
+
+  for (let k = 0; k < moves; k++) {
+    let x = Math.floor(Math.random() * N);
+    let y = Math.floor(Math.random() * N);
+    flip(x, y);
+  }
+}
+
+function render() {
+  const container = document.getElementById("grid");
+  container.innerHTML = "";
+
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      let btn = document.createElement("button");
+
+      btn.className = grid[i][j] === 1 ? "on" : "off";
+      btn.innerText = grid[i][j] === 1 ? "ON" : "OFF";
+
+      btn.onclick = () => {
+        flip(i, j);
+        render();
+      };
+
+      container.appendChild(btn);
+    }
+  }
+
+  checkWin();
+}
+
+function checkWin() {
+  let win = true;
+
+  for (let i = 0; i < N; i++)
+    for (let j = 0; j < N; j++)
+      if (grid[i][j] === 1) win = false;
+
+  if (win) setTimeout(() => alert("🏆 You Win!"), 100);
+}
+
+// BACKTRACKING
+function isAllOff(g) {
+  for (let i = 0; i < N; i++)
+    for (let j = 0; j < N; j++)
+      if (g[i][j] === 1) return false;
+  return true;
+}
+
+function solve(g, index, moves) {
+  if (index === N * N) return isAllOff(g);
+
+  let x = Math.floor(index / N);
+  let y = index % N;
+
+  flip(x, y, g);
+  moves.push([x, y]);
+
+  if (solve(g, index + 1, moves)) return true;
+
+  flip(x, y, g);
+  moves.pop();
+
+  return solve(g, index + 1, moves);
+}
+
+// HINT BUTTON FUNCTION
+function getHint() {
+  let temp = grid.map(row => [...row]);
+  let moves = [];
+
+  if (solve(temp, 0, moves) && moves.length > 0) {
+    let [x, y] = moves[0];
+    alert("💡 Try: (" + x + "," + y + ")");
+  } else {
+    alert("No solution!");
+  }
+}
+
+function newGame() {
+  generatePuzzle();
+  render();
+}
+
+newGame();
+</script>
+
+</body>
+</html>

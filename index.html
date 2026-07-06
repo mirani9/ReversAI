@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Othello AI</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a1a;
+    color: #f0f0f0;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 2rem; margin-bottom: 4px; }
+  .algo-label { font-size: 0.75rem; color: #888; margin-bottom: 20px; }
+  .scoreboard {
+    display: flex; gap: 40px; margin-bottom: 16px;
+    background: #2a2a2a; padding: 12px 32px; border-radius: 10px;
+  }
+  .score-item { text-align: center; }
+  .score-item .label { font-size: 0.7rem; color: #888; margin-bottom: 4px; }
+  .score-item .num { font-size: 2rem; font-weight: bold; }
+  .score-item.black .num { color: #aaa; }
+  .score-item.white .num { color: #fff; }
+  #status { font-size: 0.9rem; color: #ccc; margin-bottom: 16px; height: 20px; }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px; background: #145214; padding: 4px;
+    border-radius: 8px;
+    width: min(440px, 94vw); height: min(440px, 94vw);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  }
+  .cell {
+    background: #1a6e1a; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; position: relative; transition: background 0.1s;
+  }
+  .cell:hover { background: #228022; }
+  .cell.hint::after {
+    content: ''; width: 30%; height: 30%;
+    border-radius: 50%; background: rgba(255,255,255,0.25);
+  }
+  .tile { width: 80%; height: 80%; border-radius: 50%; position: absolute; }
+  .tile.black {
+    background: radial-gradient(circle at 35% 30%, #555, #111);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  }
+  .tile.white {
+    background: radial-gradient(circle at 35% 30%, #fff, #ccc);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .stats {
+    margin-top: 16px; background: #2a2a2a;
+    border-radius: 10px; padding: 14px 24px;
+    display: flex; gap: 32px; font-size: 0.8rem;
+  }
+  .stat { text-align: center; }
+  .stat .s-label { color: #888; margin-bottom: 4px; }
+  .stat .s-val { font-size: 1.2rem; font-weight: bold; color: #6dda6d; }
+  .stat .s-val.red { color: #ff6b6b; }
+  .buttons { margin-top: 16px; display: flex; gap: 12px; }
+  button {
+    background: #2a2a2a; color: #f0f0f0; border: 1px solid #444;
+    padding: 10px 24px; border-radius: 8px; font-size: 0.85rem;
+    cursor: pointer; transition: background 0.15s;
+  }
+  button:hover { background: #3a3a3a; }
+  button.primary { background: #2d6e2d; border-color: #3a8e3a; }
+  button.primary:hover { background: #357535; }
+  #game-over {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8); align-items: center;
+    justify-content: center; flex-direction: column; gap: 12px; z-index: 10;
+  }
+  #game-over.show { display: flex; }
+  #game-over h2 { font-size: 3rem; color: #6dda6d; }
+  #game-over p { color: #aaa; font-size: 1rem; }
+</style>
+</head>
+<body>
+
+<h1>Othello AI</h1>
+<p class="algo-label">Alpha-Beta Pruning Algorithm</p>
+
+<div class="scoreboard">
+  <div class="score-item black">
+    <div class="label">YOU (●)</div>
+    <div class="num" id="black-score">2</div>
+  </div>
+  <div class="score-item white">
+    <div class="label">AI (○)</div>
+    <div class="num" id="white-score">2</div>
+  </div>
+</div>
+
+<div id="status">Your turn! Click a dot to place your tile.</div>
+<div id="board"></div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="s-label">Nodes Checked</div>
+    <div class="s-val" id="stat-nodes">—</div>
+  </div>
+  <div class="stat">
+    <div class="s-label">Branches Pruned</div>
+    <div class="s-val red" id="stat-pruned">—</div>
+  </div>
+</div>
+
+<div class="buttons">
+  <button class="primary" onclick="resetGame()">New Game</button>
+  <button onclick="toggleHints()">Toggle Hints</button>
+</div>
+
+<div id="game-over">
+  <h2 id="go-title">YOU WIN!</h2>
+  <p id="go-score"></p>
+  <button class="primary" style="margin-top:8px" onclick="resetGame()">Play Again</button>
+</div>
+
+
+<!-- ============================================================ -->
+<!--   AI.JS — Alpha-Beta Pruning Logic (separate module)        -->
+<!-- ============================================================ -->
+<script>
+  const SIZE = 8;
+  const EMPTY = 0, BLACK = 1, WHITE = 2;
+  const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  const DEPTH = 5;
+
+  // Position weights — corners most valuable
+  const WEIGHTS = [
+    [120,-20,20, 5, 5,20,-20,120],
+    [-20,-40,-5,-5,-5,-5,-40,-20],
+    [ 20, -5,15, 3, 3,15, -5, 20],
+    [  5, -5, 3, 3, 3, 3, -5,  5],
+    [  5, -5, 3, 3, 3, 3, -5,  5],
+    [ 20, -5,15, 3, 3,15, -5, 20],
+    [-20,-40,-5,-5,-5,-5,-40,-20],
+    [120,-20,20, 5, 5,20,-20,120]
+  ];
+
+  let nodesEvaluated = 0, pruneCount = 0;
+
+  function isValid(board, r, c, player) {
+    if (board[r][c] !== EMPTY) return false;
+    const opp = player === BLACK ? WHITE : BLACK;
+    for (const [dr, dc] of DIRS) {
+      let nr = r+dr, nc = c+dc, hasOpp = false;
+      while (nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE&&board[nr][nc]===opp) {
+        nr+=dr; nc+=dc; hasOpp=true;
+      }
+      if (hasOpp&&nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE&&board[nr][nc]===player) return true;
+    }
+    return false;
+  }
+
+  function getValidMoves(board, player) {
+    const moves = [];
+    for (let r=0;r<SIZE;r++)
+      for (let c=0;c<SIZE;c++)
+        if (isValid(board,r,c,player)) moves.push([r,c]);
+    return moves;
+  }
+
+  function applyMove(board, r, c, player) {
+    const nb = board.map(row => [...row]);
+    nb[r][c] = player;
+    const opp = player===BLACK ? WHITE : BLACK;
+    for (const [dr,dc] of DIRS) {
+      let nr=r+dr, nc=c+dc, flips=[];
+      while (nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE&&nb[nr][nc]===opp) {
+        flips.push([nr,nc]); nr+=dr; nc+=dc;
+      }
+      if (flips.length&&nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE&&nb[nr][nc]===player)
+        for (const [fr,fc] of flips) nb[fr][fc]=player;
+    }
+    return nb;
+  }
+
+  function evaluate(board) {
+    let score = 0;
+    for (let r=0;r<SIZE;r++)
+      for (let c=0;c<SIZE;c++) {
+        if (board[r][c]===WHITE) score+=WEIGHTS[r][c];
+        else if (board[r][c]===BLACK) score-=WEIGHTS[r][c];
+      }
+    score += getValidMoves(board,WHITE).length * 5;
+    score -= getValidMoves(board,BLACK).length * 5;
+    return score;
+  }
+
+  function alphaBeta(board, depth, alpha, beta, maximizing) {
+    nodesEvaluated++;
+    const player = maximizing ? WHITE : BLACK;
+    const moves = getValidMoves(board, player);
+    if (depth===0||moves.length===0) return evaluate(board);
+
+    if (maximizing) {
+      let maxEval = -Infinity;
+      for (const [r,c] of moves) {
+        const ev = alphaBeta(applyMove(board,r,c,WHITE), depth-1, alpha, beta, false);
+        maxEval = Math.max(maxEval, ev);
+        alpha = Math.max(alpha, ev);
+        if (beta<=alpha) { pruneCount++; break; }
+      }
+      return maxEval;
+    } else {
+      let minEval = Infinity;
+      for (const [r,c] of moves) {
+        const ev = alphaBeta(applyMove(board,r,c,BLACK), depth-1, alpha, beta, true);
+        minEval = Math.min(minEval, ev);
+        beta = Math.min(beta, ev);
+        if (beta<=alpha) { pruneCount++; break; } // Prune!
+      }
+      return minEval;
+    }
+  }
+
+  function getBestMove(board) {
+    nodesEvaluated=0; pruneCount=0;
+    let bestMove=null, bestScore=-Infinity;
+    for (const [r,c] of getValidMoves(board,WHITE)) {
+      const score = alphaBeta(applyMove(board,r,c,WHITE), DEPTH-1, -Infinity, Infinity, false);
+      if (score>bestScore) { bestScore=score; bestMove=[r,c]; }
+    }
+    return { move: bestMove, nodesEvaluated, pruneCount };
+  }
+</script>
+
+
+<!-- ============================================================ -->
+<!--   INDEX.JS — Game UI & Logic                                 -->
+<!-- ============================================================ -->
+<script>
+  let board = [], currentPlayer = BLACK, gameActive = true, showHints = true;
+
+  function initBoard() {
+    board = Array.from({length:SIZE}, () => Array(SIZE).fill(EMPTY));
+    board[3][3]=WHITE; board[3][4]=BLACK;
+    board[4][3]=BLACK; board[4][4]=WHITE;
+  }
+
+  function countTiles(player) {
+    let n=0;
+    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if(board[r][c]===player) n++;
+    return n;
+  }
+
+  function render() {
+    const boardEl = document.getElementById('board');
+    boardEl.innerHTML = '';
+    const hints = showHints && currentPlayer===BLACK ? getValidMoves(board,BLACK) : [];
+    const hintSet = new Set(hints.map(([r,c])=>r+','+c));
+
+    for (let r=0;r<SIZE;r++) {
+      for (let c=0;c<SIZE;c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        if (hintSet.has(r+','+c)) cell.classList.add('hint');
+        if (board[r][c]!==EMPTY) {
+          const tile = document.createElement('div');
+          tile.className = 'tile '+(board[r][c]===BLACK?'black':'white');
+          cell.appendChild(tile);
+        }
+        cell.onclick = () => handleClick(r,c);
+        boardEl.appendChild(cell);
+      }
+    }
+    document.getElementById('black-score').textContent = countTiles(BLACK);
+    document.getElementById('white-score').textContent = countTiles(WHITE);
+  }
+
+  async function handleClick(r, c) {
+    if (!gameActive||currentPlayer!==BLACK) return;
+    if (!isValid(board,r,c,BLACK)) return;
+    board = applyMove(board,r,c,BLACK);
+    currentPlayer = WHITE;
+    render();
+    setStatus('AI is thinking...');
+    await sleep(100);
+    doAiMove();
+  }
+
+  async function doAiMove() {
+    const result = getBestMove(board);
+    document.getElementById('stat-nodes').textContent = result.nodesEvaluated.toLocaleString();
+    document.getElementById('stat-pruned').textContent = result.pruneCount.toLocaleString();
+    if (result.move) board = applyMove(board,result.move[0],result.move[1],WHITE);
+    currentPlayer = BLACK;
+    render();
+
+    const myMoves = getValidMoves(board,BLACK);
+    const aiMoves = getValidMoves(board,WHITE);
+    if (myMoves.length===0&&aiMoves.length===0) { endGame(); return; }
+    if (myMoves.length===0) {
+      setStatus('No moves for you. AI goes again...');
+      currentPlayer=WHITE; await sleep(700); doAiMove(); return;
+    }
+    setStatus('Your turn! Click a dot to place your tile.');
+  }
+
+  function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+  function endGame() {
+    gameActive=false;
+    const b=countTiles(BLACK), w=countTiles(WHITE);
+    document.getElementById('go-title').textContent = b>w?'YOU WIN!':w>b?'AI WINS!':'DRAW!';
+    document.getElementById('go-score').textContent = 'Black: '+b+'  —  White: '+w;
+    document.getElementById('game-over').classList.add('show');
+  }
+
+  function resetGame() {
+    document.getElementById('game-over').classList.remove('show');
+    initBoard(); gameActive=true; currentPlayer=BLACK; showHints=true;
+    document.getElementById('stat-nodes').textContent='—';
+    document.getElementById('stat-pruned').textContent='—';
+    setStatus('Your turn! Click a dot to place your tile.');
+    render();
+  }
+
+  function toggleHints() { showHints=!showHints; render(); }
+  function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+  initBoard();
+  render();
+</script>
+</body>
+</html>
