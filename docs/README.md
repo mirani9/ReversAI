@@ -43,11 +43,9 @@ Players alternate placing pieces on an 8x8 board. Any opponent discs surrounded 
 - `index.html` - page structure and asset references
 - `styles.css` - all styling and layout rules
 - `script.js` - game logic, rendering, AI, and interaction
-- `README.md` — project documentation
-- `LICENSE` — MIT license
+- `README.md` - project documentation
+- `LICENSE` - MIT license
 - `.gitignore` — project ignore rules
-- `favicon.png` — project favicon
-- `screenshots/game.png` — placeholder screenshot
 
 ## Installation & Running
 
