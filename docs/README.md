@@ -40,9 +40,9 @@ Players alternate placing pieces on an 8x8 board. Any opponent discs surrounded 
 
 ## Project Structure
 
-- `index.html` — page structure and asset references
-- `styles.css` — all styling and layout rules
-- `script.js` — game logic, rendering, AI, and interaction
+- `index.html` - page structure and asset references
+- `styles.css` - all styling and layout rules
+- `script.js` - game logic, rendering, AI, and interaction
 - `README.md` — project documentation
 - `LICENSE` — MIT license
 - `.gitignore` — project ignore rules
